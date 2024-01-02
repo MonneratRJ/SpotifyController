@@ -2,8 +2,7 @@ import tkinter as tk
 from tkinter import ttk, scrolledtext
 from spotipy.oauth2 import SpotifyOAuth
 import spotipy
-import json
-import requests
+import json, threading, requests
 from PIL import Image, ImageTk  # Make sure to install Pillow: pip install Pillow
 
 # Load Spotify API credentials from config.json
@@ -28,6 +27,18 @@ def get_playback_state():
         return playback_state.get('is_playing', False)
     return False
 
+# Function to fetch album cover in a separate thread
+def fetch_album_cover(album_cover_url):
+    try:
+        response = requests.get(album_cover_url, stream=True)
+        response.raise_for_status()
+        album_cover = ImageTk.PhotoImage(Image.open(response.raw).resize((100, 100)))
+        album_cover_image.configure(image=album_cover)
+        album_cover_image.image = album_cover  # Keep a reference to prevent garbage collection
+    except Exception as e:
+        print(f"Error fetching album cover: {e}")
+
+# Function to update track information and album cover
 def update_track_info():
     current_playback = sp.current_playback()
     if current_playback is not None:
@@ -36,19 +47,20 @@ def update_track_info():
         song_name = current_playback.get('item', {}).get('name', 'Unknown Song')
         track_info = f"{artist_name} - {song_name}"
         track_info_label.delete(1.0, tk.END)  # Clear previous content
-        track_info_label.insert(tk.END, track_info)
+        track_info_label.insert(tk.END, track_info, "center")  # Apply the "center" tag
 
-        # Update album cover
+        # Update album cover using a separate thread
         album_cover_url = current_playback.get('item', {}).get('album', {}).get('images', [{}])[0].get('url')
         if album_cover_url:
-            album_cover = ImageTk.PhotoImage(Image.open(requests.get(album_cover_url, stream=True).raw).resize((100, 100)))
-            album_cover_image.configure(image=album_cover)
-            album_cover_image.image = album_cover  # Keep a reference to prevent garbage collection
+            threading.Thread(target=lambda: fetch_album_cover(album_cover_url), daemon=True).start()
         else:
             # Display a default image if no album cover is available
             default_image = ImageTk.PhotoImage(Image.open("templates/img/default_album_cover.png"))  # Replace with your default image
             album_cover_image.configure(image=default_image)
             album_cover_image.image = default_image  # Keep a reference to prevent garbage collection
+    
+    # Schedule the function to be called again after a delay (adjust as needed)
+    root.after(2500, update_track_info)
 
 def update_play_pause_button():
     is_playing = get_playback_state()
@@ -93,7 +105,7 @@ root.title("Spotify Controller")
 root.attributes('-topmost', True)  # Always on top
 
 # Create a scrolledtext widget for displaying current track information
-track_info_label = scrolledtext.ScrolledText(root, wrap=tk.WORD, width=30, height=3)
+track_info_label = tk.Text(root, wrap=tk.WORD, height=3, width=30)
 track_info_label.grid(row=1, column=0, columnspan=3, pady=0, padx=5)
 
 # Create an Image widget for displaying the album cover
