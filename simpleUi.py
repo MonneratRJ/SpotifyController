@@ -21,19 +21,33 @@ token_info = sp_oauth.get_cached_token()
 # Set up Spotipy with the authentication token
 sp = spotipy.Spotify(auth=token_info['access_token'])
 
-def play_pause():
+def get_playback_state():
     playback_state = sp.current_playback()
     if playback_state is not None:
-        if playback_state['is_playing']:
-            sp.pause_playback()
-        else:
-            sp.start_playback()
+        return playback_state.get('is_playing', False)
+    return False
+
+def update_play_pause_button():
+    is_playing = get_playback_state()
+    button_image = pause_icon if is_playing else play_icon
+    play_pause_button.configure(image=button_image)
+    play_pause_button.image = button_image  # Keep a reference to prevent garbage collection
+
+def play_pause():
+    playback_state = get_playback_state()
+    if playback_state:
+        sp.pause_playback()
+    else:
+        sp.start_playback()
+    update_play_pause_button()
 
 def next_track():
     sp.next_track()
+    update_play_pause_button()
 
 def previous_track():
     sp.previous_track()
+    update_play_pause_button()
 
 # Tkinter GUI
 root = tk.Tk()
@@ -48,7 +62,7 @@ previous_icon = ImageTk.PhotoImage(Image.open("templates/img/previous_icon.png")
 
 # Create buttons with icons
 previous_button = ttk.Button(root, image=previous_icon, command=previous_track)
-play_pause_button = ttk.Button(root, image=pause_icon, command=play_pause)
+play_pause_button = ttk.Button(root, image=play_icon, command=play_pause)
 next_button = ttk.Button(root, image=next_icon, command=next_track)
 
 # Grid layout
